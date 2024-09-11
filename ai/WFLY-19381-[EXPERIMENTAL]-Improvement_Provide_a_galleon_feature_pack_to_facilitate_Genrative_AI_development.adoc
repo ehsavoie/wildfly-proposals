@@ -1,0 +1,172 @@
+---
+categories:
+  - ai
+# - core
+# - management
+# if missing, add it to _data/widfly-categories and use its id
+---
+= [Experimental] Provide a Galleon feature pack to facilitate Generative AI application development
+
+:author:            Emmanuel Hugonnet
+:email:             ehugonne@redhat.com
+:toc:               left
+:icons:             font
+:idprefix:
+:idseparator:       -
+
+== Overview
+
+The goal of this feature is to provide a simple way to develop Generative AI applications. 
+This could be done by allowing those resources to be configured in WildFly and then injected into the application via CDI to be used there.
+Given that currently one of the main use-case of Generative AI is to provide Retrieval-Augmented Generation application, all the elements required for such an application should be accessible.
+The feature should take inspiration using LangChain4J which provides an API over several LLM inferers to build such applications.
+As an experimental feature, we will provide LangChain4J integration instead of providing our own API, defining resources to be injected into applications in an *ai* subsystem.
+
+== Issue Metadata
+
+=== Issue
+
+* https://issues.redhat.com/browse/WFLY-19381[WFLY-19381]
+
+=== Related Issues
+
+* N/A
+
+=== Stability Level
+// Choose the planned stability level for the proposed functionality
+* [X] Experimental
+
+* [ ] Preview
+
+* [ ] Community
+
+* [ ] default
+
+=== Dev Contacts
+
+* mailto:{email}[{author}]
+
+=== QE Contacts
+
+=== Testing By
+// Put an x in the relevant field to indicate if testing will be done by Engineering or QE. 
+// Discuss with QE during the Kickoff state to decide this
+* [X] Engineering
+
+* [ ] QE
+
+=== Affected Projects or Components
+
+=== Other Interested Projects
+
+=== Relevant Installation Types
+// Remove the x next to the relevant field if the feature in question is not relevant
+// to that kind of WildFly installation
+* [x] Traditional standalone server (unzipped or provisioned by Galleon)
+
+* [] Managed domain
+
+* [] OpenShift s2i
+
+* [] Bootable jar
+
+== Requirements
+
+=== Hard Requirements
+
+This feature should be available as an external galleon feature pack thus not being bound to a specific WildFly version or to the WildFly release cycle.
+It should expand the existing feature pack by providing 
+ * Provide annotations to be able to create LangChain4J AIServices using our configured resources.LangChain4J AIServices (smallrye-llm ? )
+ * Support for for @Tool. 
+ * Support for ChatMemory.
+ * streaming chat language models (aka a chat APi with the llm): `dev.langchain4j.model.chat.StreamingChatLanguageModel`.
+
+ Those resources should be exposed via CDI (and thus Weld) to the application using qualifier and type.
+
+ The less WildFly specific annotations are used the better so this feature should try to use annotations from librairies that are already used in WildFly like @Named or annotations from LangChain4J.
+
+
+=== Nice-to-Have Requirements
+
+ * Replace the HTTP clients used so that we have only one that is supported for every API.
+ * Replace the JSON marshalling/umarshalling librairies so that we have only one (through RESTEasy) that is supported.
+ * Allow to interact with the LLM from the management API
+ * integrate with SmallRye LLM 
+
+
+=== Non-Requirements
+// Use this section to explicitly discuss things that readers might think are required
+// but which are not required.
+
+=== Future Work
+// Use this section to discuss requirements that are not addressed by this proposal
+// but which may be addressed in later proposals.
+
+== Backwards Compatibility
+
+// Does this enhancement affect backwards compatibility with previously released
+// versions of WildFly?
+// Can the identified incompatibility be avoided?
+
+=== Default Configuration
+
+=== Importing Existing Configuration
+
+=== Deployments
+
+The required librairies should be added automatically on the deployment classpath. 
+
+=== Interoperability
+
+== Implementation Plan
+
+=== Supporting LangChain4J AiServices
+
+Using smallrye-llm we should take advantgae of their portable extension and the hooks they provide to inject the object we built with WildFly management API.
+So we should have something alongside this:
+
+[source,java]
+----
+import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
+import io.smallrye.llm.spi.RegisterAIService;
+import jakarta.enterprise.context.SessionScoped;
+
+@RegisterAIService(chatLanguageModelName = "mychat", tools = {org.wildfly.ai.websocket.Calculator.class}, scope = SessionScoped.class)
+public interface SimpleAIService {
+    @SystemMessage("""
+                   You are an AI named Bob answering general question.
+                   Your response must be polite, use the same language as the question, and be relevant to the question.""")
+    String chat(@UserMessage String question);
+}
+----
+
+We should  provide our own implementations of
+ * `io.smallrye.llm.core.langchain4j.core.config.spi.LLMConfig` to inject the beans created by our extension
+ * `io.smallrye.llm.core.langchain4j.core.config.spi.ChatMemoryFactory` to provide our own ChatMemory with integration with the HttpSession id.
+
+And then register them as the services to be loaded by smallrye-llam.
+
+== Security Considerations
+
+////
+Identification if any security implications that may need to be considered with this feature
+or a confirmation that there are no security implications to consider.
+////
+
+== Test Plan
+
+== Community Documentation
+////
+Generally a feature should have documentation as part of the PR to wildfly master, or as a follow up PR if the feature is in wildfly-core. In some cases though the documentation belongs more in a component, or does not need any documentation. Indicate which of these will happen.
+////
+== Release Note Content
+////
+Draft verbiage for up to a few sentences on the feature for inclusion in the
+Release Note blog article for the release that first includes this feature. 
+Example article: http://wildfly.org/news/2018/08/30/WildFly14-Final-Released/.
+This content will be edited, so there is no need to make it perfect or discuss
+what release it appears in.  "See Overview" is acceptable if the overview is
+suitable. For simple features best covered as an item in a bullet-point list 
+of features containing a few words on each, use "Bullet point: <The few words>" 
+////
